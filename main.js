@@ -18,22 +18,33 @@ if (!firebase.apps.length) {
 }
 const firestore = firebase.firestore();
 
-const servers = {
+const pc  = new RTCPeerConnection({
   iceServers: [
-    {
-      urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'],
-    },
-    {
-      urls: 'turn:relay1.expressturn.com:3478',
-      username: 'ef3M3BM5MO9R3I1FPL',
-      credential: 'fJ5PCpW4JmGjbirp',
-    },
+      {
+        urls: "stun:stun.relay.metered.ca:80",
+      },
+      {
+        urls: "turn:asia.relay.metered.ca:80",
+        username: "82d7ed123310a073e284b789",
+        credential: "IPVkAILEZ+W7NwgG",
+      },
+      {
+        urls: "turn:asia.relay.metered.ca:80?transport=tcp",
+        username: "82d7ed123310a073e284b789",
+        credential: "IPVkAILEZ+W7NwgG",
+      },
+      {
+        urls: "turn:asia.relay.metered.ca:443",
+        username: "82d7ed123310a073e284b789",
+        credential: "IPVkAILEZ+W7NwgG",
+      },
+      {
+        urls: "turns:asia.relay.metered.ca:443?transport=tcp",
+        username: "82d7ed123310a073e284b789",
+        credential: "IPVkAILEZ+W7NwgG",
+      },
   ],
-  iceCandidatePoolSize: 10,
-};
-
-// Global State
-const pc = new RTCPeerConnection(servers);
+});
 let localStream = null;
 let remoteStream = null;
 
