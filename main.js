@@ -23,6 +23,11 @@ const servers = {
     {
       urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'],
     },
+    {
+      urls: 'relay1.expressturn.com:3478',
+      username: 'ef3M3BM5MO9R3I1FPL',
+      credential: 'fJ5PCpW4JmGjbirp',
+    },
   ],
   iceCandidatePoolSize: 10,
 };
