@@ -18,35 +18,37 @@ if (!firebase.apps.length) {
 }
 const firestore = firebase.firestore();
 
-const pc  = new RTCPeerConnection({
+const pc = new RTCPeerConnection({
   iceServers: [
-      {
-        urls: "stun:stun.relay.metered.ca:80",
-      },
-      {
-        urls: "turn:asia.relay.metered.ca:80",
-        username: "82d7ed123310a073e284b789",
-        credential: "IPVkAILEZ+W7NwgG",
-      },
-      {
-        urls: "turn:asia.relay.metered.ca:80?transport=tcp",
-        username: "82d7ed123310a073e284b789",
-        credential: "IPVkAILEZ+W7NwgG",
-      },
-      {
-        urls: "turn:asia.relay.metered.ca:443",
-        username: "82d7ed123310a073e284b789",
-        credential: "IPVkAILEZ+W7NwgG",
-      },
-      {
-        urls: "turns:asia.relay.metered.ca:443?transport=tcp",
-        username: "82d7ed123310a073e284b789",
-        credential: "IPVkAILEZ+W7NwgG",
-      },
+    {
+      urls: "stun:stun.relay.metered.ca:80",
+    },
+    {
+      urls: "turn:asia.relay.metered.ca:80",
+      username: "82d7ed123310a073e284b789",
+      credential: "IPVkAILEZ+W7NwgG",
+    },
+    {
+      urls: "turn:asia.relay.metered.ca:80?transport=tcp",
+      username: "82d7ed123310a073e284b789",
+      credential: "IPVkAILEZ+W7NwgG",
+    },
+    {
+      urls: "turn:asia.relay.metered.ca:443",
+      username: "82d7ed123310a073e284b789",
+      credential: "IPVkAILEZ+W7NwgG",
+    },
+    {
+      urls: "turns:asia.relay.metered.ca:443?transport=tcp",
+      username: "82d7ed123310a073e284b789",
+      credential: "IPVkAILEZ+W7NwgG",
+    },
   ],
 });
 let localStream = null;
 let remoteStream = null;
+let isInCall = false;
+let isCallCreator = false;
 
 // HTML elements
 const webcamButton = document.getElementById('webcamButton');
@@ -56,6 +58,11 @@ const callInput = document.getElementById('callInput');
 const answerButton = document.getElementById('answerButton');
 const remoteVideo = document.getElementById('remoteVideo');
 const hangupButton = document.getElementById('hangupButton');
+
+// Device selection dropdowns
+const audioInputSelect = document.getElementById('audioSource');
+const audioOutputSelect = document.getElementById('audioOutput');
+const videoSelect = document.getElementById('videoSource');
 
 // New element for notification
 const notification = document.createElement('div');
@@ -71,10 +78,49 @@ notification.style.cssText = `
 `;
 document.body.appendChild(notification);
 
-// 1. Setup media sources
+// Function to populate device options
+async function populateDevices() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  
+  const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
+  const audioOutputDevices = devices.filter(device => device.kind === 'audiooutput');
+  const videoDevices = devices.filter(device => device.kind === 'videoinput');
 
+  audioInputSelect.innerHTML = audioInputDevices.map(device => `<option value="${device.deviceId}">${device.label}</option>`).join('');
+  audioOutputSelect.innerHTML = audioOutputDevices.map(device => `<option value="${device.deviceId}">${device.label}</option>`).join('');
+  videoSelect.innerHTML = videoDevices.map(device => `<option value="${device.deviceId}">${device.label}</option>`).join('');
+}
+
+// Populate devices on load
+populateDevices();
+
+// Function to get selected devices
+function getSelectedDevices() {
+  return {
+    audio: { deviceId: audioInputSelect.value },
+    video: { deviceId: videoSelect.value }
+  };
+}
+
+// Update audio output device
+audioOutputSelect.onchange = () => {
+  if (typeof remoteVideo.sinkId !== 'undefined') {
+    remoteVideo.setSinkId(audioOutputSelect.value);
+  }
+};
+
+// Function to update button states
+function updateButtonStates() {
+  webcamButton.disabled = isInCall;
+  callButton.disabled = !localStream || isInCall;
+  answerButton.disabled = !localStream || isInCall || isCallCreator;
+  hangupButton.disabled = !isInCall;
+}
+
+// 1. Setup media sources
 webcamButton.onclick = async () => {
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  const constraints = getSelectedDevices();
+  localStream = await navigator.mediaDevices.getUserMedia(constraints);
   remoteStream = new MediaStream();
 
   // Push tracks from local stream to peer connection
@@ -99,9 +145,10 @@ webcamButton.onclick = async () => {
   webcamVideo.muted = true;
   remoteVideo.srcObject = remoteStream;
 
-  callButton.disabled = false;
-  answerButton.disabled = false;
-  webcamButton.disabled = true;
+  updateButtonStates();
+
+  // Re-populate devices to show labels
+  await populateDevices();
 };
 
 // 2. Create an offer
@@ -153,7 +200,9 @@ callButton.onclick = async () => {
     });
   });
 
-  hangupButton.disabled = false;
+  isInCall = true;
+  isCallCreator = true;
+  updateButtonStates();
 };
 
 // 3. Answer the call with the unique ID
@@ -200,11 +249,14 @@ answerButton.onclick = async () => {
     }
   });
 
-  hangupButton.disabled = false;
+  isInCall = true;
+  updateButtonStates();
 };
 
 // 4. Hangup call
 hangupButton.onclick = async () => {
+  if (!isInCall) return;
+
   const callId = callInput.value;
   const callDoc = firestore.collection('calls').doc(callId);
   
@@ -223,10 +275,12 @@ hangupButton.onclick = async () => {
   webcamVideo.srcObject = null;
   remoteVideo.srcObject = null;
   
-  // Reset UI
-  hangupButton.disabled = true;
-  callButton.disabled = false;
-  answerButton.disabled = false;
+  // Reset state
+  isInCall = false;
+  isCallCreator = false;
+  localStream = null;
+  
+  updateButtonStates();
 };
 
 // Function to handle remote hangup
@@ -248,8 +302,17 @@ function handleRemoteHangup() {
   // Clear the remote video element
   remoteVideo.srcObject = null;
   
-  // Reset UI
-  hangupButton.disabled = true;
-  callButton.disabled = false;
-  answerButton.disabled = false;
+  // Reset state
+  isInCall = false;
+  isCallCreator = false;
+  
+  updateButtonStates();
+
+  // Reset device selection
+  audioInputSelect.selectedIndex = 0;
+  audioOutputSelect.selectedIndex = 0;
+  videoSelect.selectedIndex = 0;
 }
+
+// Initial button state update
+updateButtonStates();

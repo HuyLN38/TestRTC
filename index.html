@@ -4,23 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Chat App</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <h1>Video Chat App</h1>
+        
+        <div class="device-selection">
+            <div class="select-wrapper">
+                <label for="audioSource">Audio input:</label>
+                <select id="audioSource"></select>
+            </div>
+            <div class="select-wrapper">
+                <label for="audioOutput">Audio output:</label>
+                <select id="audioOutput"></select>
+            </div>
+            <div class="select-wrapper">
+                <label for="videoSource">Video source:</label>
+                <select id="videoSource"></select>
+            </div>
+        </div>
+
         <div class="videos">
             <video id="webcamVideo" autoplay playsinline></video>
             <video id="remoteVideo" autoplay playsinline></video>
         </div>
+
         <div class="controls">
             <button id="webcamButton">Start Webcam</button>
-            <button id="callButton" disabled>Create Call</button>
-            <input id="callInput" placeholder="Enter call ID">
-            <button id="answerButton" disabled>Answer Call</button>
-            <button id="hangupButton" disabled>Hang Up</button>
+            <input id="callInput" />
+            <button id="callButton">Create Call</button>
+            <button id="answerButton">Answer Call</button>
+            <button id="hangupButton">Hang Up</button>
         </div>
     </div>
+    <script src="main.js" type="module"></script>
 </body>
-
-<script type="module" src="/main.js"></script>
 </html>
