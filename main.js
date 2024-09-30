@@ -79,7 +79,12 @@ webcamButton.onclick = async () => {
 
   // Push tracks from local stream to peer connection
   localStream.getTracks().forEach((track) => {
-    pc.addTrack(track, localStream);
+    const sender = pc.addTrack(track, localStream);
+    if (track.kind === 'audio') {
+      sender.setParameters({
+        encodings: [{ dtx: true }]
+      });
+    }
   });
 
   // Pull tracks from remote stream, add to video stream
@@ -89,7 +94,9 @@ webcamButton.onclick = async () => {
     });
   };
 
+  // Set video source, but mute audio for local video
   webcamVideo.srcObject = localStream;
+  webcamVideo.muted = true;
   remoteVideo.srcObject = remoteStream;
 
   callButton.disabled = false;
