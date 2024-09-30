@@ -45,6 +45,7 @@ const pc  = new RTCPeerConnection({
       },
   ],
 });
+
 let localStream = null;
 let remoteStream = null;
 
@@ -57,8 +58,10 @@ const answerButton = document.getElementById('answerButton');
 const remoteVideo = document.getElementById('remoteVideo');
 const hangupButton = document.getElementById('hangupButton');
 
-// 1. Setup media sources
+let callDoc = null;
+let callId = null;
 
+// 1. Setup media sources
 webcamButton.onclick = async () => {
   localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   remoteStream = new MediaStream();
@@ -86,11 +89,12 @@ webcamButton.onclick = async () => {
 // 2. Create an offer
 callButton.onclick = async () => {
   // Reference Firestore collections for signaling
-  const callDoc = firestore.collection('calls').doc();
+  callDoc = firestore.collection('calls').doc();
   const offerCandidates = callDoc.collection('offerCandidates');
   const answerCandidates = callDoc.collection('answerCandidates');
 
-  callInput.value = callDoc.id;
+  callId = callDoc.id;
+  callInput.value = callId;
 
   // Get candidates for caller, save to db
   pc.onicecandidate = (event) => {
@@ -128,20 +132,36 @@ callButton.onclick = async () => {
   });
 
   hangupButton.disabled = false;
+  answerButton.disabled = true;
 };
 
 // 3. Answer the call with the unique ID
 answerButton.onclick = async () => {
-  const callId = callInput.value;
-  const callDoc = firestore.collection('calls').doc(callId);
+  callId = callInput.value;
+  if (!callId) {
+    alert('Please enter a valid call ID');
+    return;
+  }
+
+  callDoc = firestore.collection('calls').doc(callId);
+  const callData = (await callDoc.get()).data();
+
+  if (!callData) {
+    alert('Call not found');
+    return;
+  }
+
+  if (callData.answer) {
+    alert('This call has already been answered');
+    return;
+  }
+
   const answerCandidates = callDoc.collection('answerCandidates');
   const offerCandidates = callDoc.collection('offerCandidates');
 
   pc.onicecandidate = (event) => {
     event.candidate && answerCandidates.add(event.candidate.toJSON());
   };
-
-  const callData = (await callDoc.get()).data();
 
   const offerDescription = callData.offer;
   await pc.setRemoteDescription(new RTCSessionDescription(offerDescription));
@@ -158,11 +178,53 @@ answerButton.onclick = async () => {
 
   offerCandidates.onSnapshot((snapshot) => {
     snapshot.docChanges().forEach((change) => {
-      console.log(change);
       if (change.type === 'added') {
         let data = change.doc.data();
         pc.addIceCandidate(new RTCIceCandidate(data));
       }
     });
   });
+
+  hangupButton.disabled = false;
+  callButton.disabled = true;
+};
+
+// 4. Hangup
+hangupButton.onclick = async () => {
+  // Stop all tracks of the local stream
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+  }
+
+  // Close the peer connection
+  if (pc) {
+    pc.close();
+  }
+
+  // Reset video sources
+  webcamVideo.srcObject = null;
+  remoteVideo.srcObject = null;
+
+  // Reset UI
+  webcamButton.disabled = false;
+  callButton.disabled = true;
+  answerButton.disabled = true;
+  hangupButton.disabled = true;
+
+  // Remove the call document if it exists
+  if (callDoc) {
+    await callDoc.delete();
+  }
+
+  // Reset callDoc and callId
+  callDoc = null;
+  callId = null;
+  callInput.value = '';
+};
+
+// Listen for hangup event from the other peer
+pc.oniceconnectionstatechange = () => {
+  if (pc.iceConnectionState === 'disconnected') {
+    hangupButton.onclick();
+  }
 };
