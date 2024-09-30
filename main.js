@@ -45,7 +45,6 @@ const pc  = new RTCPeerConnection({
       },
   ],
 });
-
 let localStream = null;
 let remoteStream = null;
 
@@ -58,10 +57,22 @@ const answerButton = document.getElementById('answerButton');
 const remoteVideo = document.getElementById('remoteVideo');
 const hangupButton = document.getElementById('hangupButton');
 
-let callDoc = null;
-let callId = null;
+// New element for notification
+const notification = document.createElement('div');
+notification.style.cssText = `
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background-color: red;
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  display: none;
+`;
+document.body.appendChild(notification);
 
 // 1. Setup media sources
+
 webcamButton.onclick = async () => {
   localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   remoteStream = new MediaStream();
@@ -89,12 +100,11 @@ webcamButton.onclick = async () => {
 // 2. Create an offer
 callButton.onclick = async () => {
   // Reference Firestore collections for signaling
-  callDoc = firestore.collection('calls').doc();
+  const callDoc = firestore.collection('calls').doc();
   const offerCandidates = callDoc.collection('offerCandidates');
   const answerCandidates = callDoc.collection('answerCandidates');
 
-  callId = callDoc.id;
-  callInput.value = callId;
+  callInput.value = callDoc.id;
 
   // Get candidates for caller, save to db
   pc.onicecandidate = (event) => {
@@ -119,6 +129,11 @@ callButton.onclick = async () => {
       const answerDescription = new RTCSessionDescription(data.answer);
       pc.setRemoteDescription(answerDescription);
     }
+    
+    // Check if the other party has hung up
+    if (data?.hangup) {
+      handleRemoteHangup();
+    }
   });
 
   // When answered, add candidate to peer connection
@@ -132,36 +147,20 @@ callButton.onclick = async () => {
   });
 
   hangupButton.disabled = false;
-  answerButton.disabled = true;
 };
 
 // 3. Answer the call with the unique ID
 answerButton.onclick = async () => {
-  callId = callInput.value;
-  if (!callId) {
-    alert('Please enter a valid call ID');
-    return;
-  }
-
-  callDoc = firestore.collection('calls').doc(callId);
-  const callData = (await callDoc.get()).data();
-
-  if (!callData) {
-    alert('Call not found');
-    return;
-  }
-
-  if (callData.answer) {
-    alert('This call has already been answered');
-    return;
-  }
-
+  const callId = callInput.value;
+  const callDoc = firestore.collection('calls').doc(callId);
   const answerCandidates = callDoc.collection('answerCandidates');
   const offerCandidates = callDoc.collection('offerCandidates');
 
   pc.onicecandidate = (event) => {
     event.candidate && answerCandidates.add(event.candidate.toJSON());
   };
+
+  const callData = (await callDoc.get()).data();
 
   const offerDescription = callData.offer;
   await pc.setRemoteDescription(new RTCSessionDescription(offerDescription));
@@ -178,6 +177,7 @@ answerButton.onclick = async () => {
 
   offerCandidates.onSnapshot((snapshot) => {
     snapshot.docChanges().forEach((change) => {
+      console.log(change);
       if (change.type === 'added') {
         let data = change.doc.data();
         pc.addIceCandidate(new RTCIceCandidate(data));
@@ -185,46 +185,64 @@ answerButton.onclick = async () => {
     });
   });
 
+  // Listen for hangup
+  callDoc.onSnapshot((snapshot) => {
+    const data = snapshot.data();
+    if (data?.hangup) {
+      handleRemoteHangup();
+    }
+  });
+
   hangupButton.disabled = false;
-  callButton.disabled = true;
 };
 
-// 4. Hangup
+// 4. Hangup call
 hangupButton.onclick = async () => {
-  // Stop all tracks of the local stream
+  const callId = callInput.value;
+  const callDoc = firestore.collection('calls').doc(callId);
+  
+  // Update the document to indicate hangup
+  await callDoc.update({ hangup: true });
+  
+  // Close the peer connection
+  pc.close();
+  
+  // Stop all tracks on the local stream
   if (localStream) {
     localStream.getTracks().forEach(track => track.stop());
   }
-
-  // Close the peer connection
-  if (pc) {
-    pc.close();
-  }
-
-  // Reset video sources
+  
+  // Clear the video elements
   webcamVideo.srcObject = null;
   remoteVideo.srcObject = null;
-
+  
   // Reset UI
-  webcamButton.disabled = false;
-  callButton.disabled = true;
-  answerButton.disabled = true;
   hangupButton.disabled = true;
-
-  // Remove the call document if it exists
-  if (callDoc) {
-    await callDoc.delete();
-  }
-
-  // Reset callDoc and callId
-  callDoc = null;
-  callId = null;
-  callInput.value = '';
+  callButton.disabled = false;
+  answerButton.disabled = false;
 };
 
-// Listen for hangup event from the other peer
-pc.oniceconnectionstatechange = () => {
-  if (pc.iceConnectionState === 'disconnected') {
-    hangupButton.onclick();
+// Function to handle remote hangup
+function handleRemoteHangup() {
+  // Display notification
+  notification.textContent = "The other person has hung up";
+  notification.style.display = "block";
+  
+  // Hide notification after 5 seconds
+  setTimeout(() => {
+    notification.style.display = "none";
+  }, 5000);
+  
+  // Stop all tracks on the remote stream
+  if (remoteStream) {
+    remoteStream.getTracks().forEach(track => track.stop());
   }
-};
+  
+  // Clear the remote video element
+  remoteVideo.srcObject = null;
+  
+  // Reset UI
+  hangupButton.disabled = true;
+  callButton.disabled = false;
+  answerButton.disabled = false;
+}
