@@ -21,28 +21,13 @@ const firestore = firebase.firestore();
 const pc = new RTCPeerConnection({
   iceServers: [
     {
-      urls: "stun:stun.relay.metered.ca:80",
+      urls: "STUN:freestun.net:3478",
     },
     {
-      urls: "turn:asia.relay.metered.ca:80",
-      username: "82d7ed123310a073e284b789",
-      credential: "IPVkAILEZ+W7NwgG",
-    },
-    {
-      urls: "turn:asia.relay.metered.ca:80?transport=tcp",
-      username: "82d7ed123310a073e284b789",
-      credential: "IPVkAILEZ+W7NwgG",
-    },
-    {
-      urls: "turn:asia.relay.metered.ca:443",
-      username: "82d7ed123310a073e284b789",
-      credential: "IPVkAILEZ+W7NwgG",
-    },
-    {
-      urls: "turns:asia.relay.metered.ca:443?transport=tcp",
-      username: "82d7ed123310a073e284b789",
-      credential: "IPVkAILEZ+W7NwgG",
-    },
+      urls: "TURN:freestun.net:3478",
+      username: "free",
+      credential: "free",
+    }
   ],
 });
 let localStream = null;
