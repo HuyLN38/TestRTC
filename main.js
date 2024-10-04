@@ -3,6 +3,9 @@ import './style.css';
 import firebase from 'firebase/app';
 import 'firebase/firestore';
 
+const cors = require('cors');
+app.use(cors());
+
 const firebaseConfig = {
   apiKey: "AIzaSyBiMYp6mh6ITGKHKQX6ebyx4h0p6tj-j5E",
   authDomain: "parentlink-30210.firebaseapp.com",
@@ -19,14 +22,12 @@ if (!firebase.apps.length) {
 const firestore = firebase.firestore();
 
 const pc = new RTCPeerConnection({
-  iceServers: [
-    {
-      urls: "STUN:freestun.net:3478",
-    },
-    {
-      urls: "TURN:freestun.net:3478",
-      username: "free",
-      credential: "free",
+    iceServers: [
+      { urls: "stun:huyln.info:3478" },
+      {
+        "urls": "turn:huyln.info:3478",
+        "username": "huyln38",
+        "credential": "huy123456789"
     }
   ],
 });
@@ -111,11 +112,6 @@ webcamButton.onclick = async () => {
   // Push tracks from local stream to peer connection
   localStream.getTracks().forEach((track) => {
     const sender = pc.addTrack(track, localStream);
-    if (track.kind === 'audio') {
-      sender.setParameters({
-        encodings: [{ dtx: true }]
-      });
-    }
   });
 
   // Pull tracks from remote stream, add to video stream
@@ -151,7 +147,12 @@ callButton.onclick = async () => {
   };
 
   // Create offer
-  const offerDescription = await pc.createOffer();
+  const offerOptions = {
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: true,
+    voiceActivityDetection: true
+  };
+  const offerDescription = await pc.createOffer(offerOptions);
   await pc.setLocalDescription(offerDescription);
 
   const offer = {
@@ -200,7 +201,7 @@ answerButton.onclick = async () => {
   pc.onicecandidate = (event) => {
     event.candidate && answerCandidates.add(event.candidate.toJSON());
   };
-
+  
   const callData = (await callDoc.get()).data();
 
   const offerDescription = callData.offer;
